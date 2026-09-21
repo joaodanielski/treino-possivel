@@ -2,7 +2,7 @@
 
 Aplicativo móvel desenvolvido para pessoas que treinam por conta própria com tempo e equipamentos limitados. O sistema utiliza Inteligência Artificial Generativa para adaptar planos de treinamento à realidade do usuário, ajustando rotinas automaticamente frente a falhas de frequência ou restrições de maquinário.
 
-Trabalho acadêmico desenvolvido por João Victor Danielski para o curso de Engenharia de Software da Universidade Tecnológica Federal do Paraná.
+Trabalho acadêmico desenvolvido por João Victor Danielski e Lucas Felipetto para o curso de Engenharia de Software da Universidade Tecnológica Federal do Paraná.
 
 ## Protótipo Navegável
 O fluxo principal das interfaces foi validado e gerado visualmente por IA. O protótipo pode ser visualizado diretamente via v0.dev:
