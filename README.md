@@ -22,7 +22,6 @@ A documentação técnica e de produto está modularizada no diretório `/docs`:
 
 - **Front-end:** React Native (Expo)
 - **Persistência e Autenticação:** Firebase (Firestore, Auth)
-- **Cache Local:** M## Como executar o projeto (Clone Limpo)
 
 ## Como executar o projeto (Clone Limpo)
 
