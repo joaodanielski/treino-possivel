@@ -1,77 +1,138 @@
-import { useState, useCallback } from "react";
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { useCallback, useState } from "react";
+import { View, Text, Pressable, ScrollView } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { carregarHistorico, carregarPerfil, PERFIL_PADRAO } from "@/lib/storage";
+import { diaDaSemana, diaDoMes, formatarDuracao } from "@/lib/format";
+import type { Perfil, TreinoRegistro } from "@/lib/types";
+
+const SEMANA_MS = 7 * 24 * 60 * 60 * 1000;
 
 export default function Home() {
-  const [nome, setNome] = useState("");
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [perfil, setPerfil] = useState<Perfil>(PERFIL_PADRAO);
+  const [historico, setHistorico] = useState<TreinoRegistro[]>([]);
+  const [agora, setAgora] = useState(0);
 
-  // O useFocusEffect garante que o nome atualize automaticamente
-  // sempre que você voltar para a aba Home, sem precisar recarregar o app.
+  // Recarrega sempre que a aba ganha foco (ex.: depois de salvar o perfil ou finalizar um treino).
   useFocusEffect(
     useCallback(() => {
-      const carregarNome = async () => {
+      (async () => {
+        setAgora(Date.now());
         try {
-          const nomeSalvo = await AsyncStorage.getItem("@perfil_nome");
-          if (nomeSalvo) {
-            setNome(nomeSalvo);
-          } else {
-            setNome("Atleta");
-          }
-        } catch (e) {
-          setNome("Atleta");
+          setPerfil(await carregarPerfil());
+          setHistorico(await carregarHistorico());
+        } catch {
+          // Na Home, dados ilegíveis só significam "sem resumo"; o erro é tratado no Histórico.
+          setHistorico([]);
         }
-      };
-      carregarNome();
+      })();
     }, []),
   );
 
+  const concluidosNaSemana = historico.filter(
+    (t) => agora - new Date(t.dataISO).getTime() < SEMANA_MS,
+  ).length;
+  const meta = Math.max(perfil.diasPorSemana, 1);
+  const progresso = Math.min(100, Math.round((concluidosNaSemana / meta) * 100));
+  const ultimo = historico[0];
+
   return (
-    <ScrollView className="flex-1 bg-gray-50 pt-12 px-6">
-      <View className="mb-8 flex-row justify-between items-center">
-        <View>
-          <Text className="text-gray-500 text-lg">Bem-vindo de volta,</Text>
-          <Text className="text-3xl font-bold text-gray-800">{nome}!</Text>
-        </View>
-        <Ionicons name="person-circle-outline" size={48} color="#3b82f6" />
+    <ScrollView
+      className="flex-1 bg-gray-900"
+      contentContainerStyle={{
+        paddingTop: insets.top + 16,
+        paddingHorizontal: 24,
+        paddingBottom: 32,
+      }}
+    >
+      <View className="mb-6">
+        <Text className="text-gray-400 text-base">Seu progresso</Text>
+        <Text className="text-2xl font-bold text-white mt-1">
+          Olá, {perfil.nome.trim() || "Atleta"}{" "}
+          <Text className="text-lime-400">· {perfil.objetivo}</Text>
+        </Text>
       </View>
 
-      <View className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-8">
-        <View className="bg-blue-100 w-12 h-12 rounded-full items-center justify-center mb-4">
-          <Ionicons name="sparkles" size={24} color="#3b82f6" />
+      <View className="bg-gray-800 rounded-2xl p-4 border border-white/10 mb-6">
+        <View className="flex-row justify-between mb-3">
+          <Text className="text-gray-400 text-xs font-medium">
+            Treinos nos últimos 7 dias
+          </Text>
+          <Text className="text-white text-xs font-medium">
+            {concluidosNaSemana} de {meta}
+          </Text>
         </View>
-        <Text className="text-xl font-bold text-gray-800 mb-2">
-          Seu Treino de Hoje
-        </Text>
-        <Text className="text-gray-500 mb-6">
-          A Inteligência Artificial está pronta para montar o plano perfeito
-          baseado no seu objetivo atual e equipamentos disponíveis.
-        </Text>
+        <View className="h-2 rounded-full bg-gray-700 overflow-hidden">
+          <View
+            className="h-full rounded-full bg-lime-400"
+            style={{ width: `${progresso}%` }}
+          />
+        </View>
+      </View>
 
-        <TouchableOpacity
-          className="bg-blue-500 py-4 rounded-xl items-center flex-row justify-center shadow-md shadow-blue-300"
+      <View className="bg-gray-800 rounded-3xl p-6 border border-white/10 mb-6">
+        <View className="bg-gray-700 w-12 h-12 rounded-full items-center justify-center mb-4">
+          <Ionicons name="sparkles" size={24} color="#a3e635" />
+        </View>
+        <Text className="text-xl font-bold text-white mb-2">
+          Seu treino de hoje
+        </Text>
+        <Text className="text-gray-400 mb-6">
+          Informe o tempo e os equipamentos que você tem agora e a IA monta o
+          treino possível.
+        </Text>
+        <Pressable
+          className="bg-lime-400 py-4 rounded-2xl items-center flex-row justify-center"
           onPress={() => router.push("/treino/geracao-ia")}
         >
-          <Ionicons name="play" size={20} color="white" className="mr-2" />
-          <Text className="text-white font-bold text-lg ml-2">
-            Gerar Treino com IA
+          <Ionicons name="barbell" size={22} color="#111827" />
+          <Text className="text-gray-900 font-bold text-base ml-2">
+            Gerar treino com IA
           </Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
-      <Text className="text-lg font-bold text-gray-800 mb-4">Dica do Dia</Text>
-      <View className="bg-blue-50 p-4 rounded-2xl border border-blue-100 flex-row items-center mb-10">
-        <Ionicons
-          name="information-circle"
-          size={24}
-          color="#3b82f6"
-          className="mr-3"
-        />
-        <Text className="text-blue-800 flex-1 ml-2">
-          Lembre-se: a consistência é mais importante que a carga. Faça o que é
-          possível hoje!
+      <Text className="text-lg font-bold text-white mb-3">Último treino</Text>
+      {ultimo ? (
+        <Pressable
+          className="flex-row items-center bg-gray-800 rounded-2xl p-4 border border-white/10"
+          onPress={() =>
+            router.push({ pathname: "/treino/[id]", params: { id: ultimo.id } })
+          }
+        >
+          <View className="w-12 h-12 rounded-xl bg-gray-700 items-center justify-center mr-4">
+            <Text className="text-white font-bold text-lg">
+              {diaDoMes(ultimo.dataISO)}
+            </Text>
+            <Text className="text-gray-400 text-[10px]">
+              {diaDaSemana(ultimo.dataISO)}
+            </Text>
+          </View>
+          <View className="flex-1">
+            <Text className="text-white font-semibold" numberOfLines={1}>
+              {ultimo.titulo}
+            </Text>
+            <Text className="text-gray-400 text-xs mt-1">
+              {ultimo.status} · {formatarDuracao(ultimo.duracaoSegundos)}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+        </Pressable>
+      ) : (
+        <View className="bg-gray-800 rounded-2xl p-4 border border-white/10">
+          <Text className="text-gray-400">
+            Você ainda não concluiu nenhum treino. Que tal começar agora?
+          </Text>
+        </View>
+      )}
+
+      <View className="bg-gray-800 p-4 rounded-2xl border border-white/10 flex-row items-center mt-6">
+        <Ionicons name="information-circle" size={24} color="#a3e635" />
+        <Text className="text-gray-300 flex-1 ml-3">
+          Consistência vale mais que carga. Faça o que é possível hoje!
         </Text>
       </View>
     </ScrollView>

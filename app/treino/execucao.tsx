@@ -1,187 +1,273 @@
-import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
-import { useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, TextInput, Pressable, ScrollView, Alert } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// Mock do treino gerado pela IA (Futuramente virá via parâmetro)
-const TREINO_MOCK = [
-  { id: "1", nome: "Flexão de Braços", series: "3x12", concluido: false },
-  { id: "2", nome: "Agachamento Livre", series: "4x15", concluido: false },
-  { id: "3", nome: "Prancha Abdominal", series: "3x45s", concluido: false },
-];
+import { adicionarTreino } from "@/lib/storage";
+import { formatarDuracao } from "@/lib/format";
+import { lerExercicios, primeiro } from "@/lib/params";
+import type { ExercicioRegistro, TreinoRegistro } from "@/lib/types";
 
 export default function Execucao() {
   const router = useRouter();
-  const [exercicios, setExercicios] = useState(TREINO_MOCK);
+  const insets = useSafeAreaInsets();
+  const { titulo, exercicios: exerciciosParam } = useLocalSearchParams<{
+    titulo?: string;
+    exercicios?: string;
+  }>();
 
-  // Estados do Cronômetro
+  // Plano recebido por parâmetro (serializado pela tela de plano).
+  const plano = useMemo(() => lerExercicios(exerciciosParam), [exerciciosParam]);
+  const nomeTreino = primeiro(titulo) ?? "Treino";
+
+  const [registro, setRegistro] = useState<ExercicioRegistro[]>(() =>
+    (plano ?? []).map((ex) => ({
+      id: ex.id,
+      nome: ex.nome,
+      repsAlvo: ex.reps,
+      series: Array.from({ length: ex.series }, () => ({
+        carga: "",
+        reps: "",
+        concluida: false,
+      })),
+    })),
+  );
   const [segundos, setSegundos] = useState(0);
-  const [ativo, setAtivo] = useState(false);
+  const [pausado, setPausado] = useState(false);
+  const [salvando, setSalvando] = useState(false);
 
-  // Lógica do Cronômetro
   useEffect(() => {
-    let intervalo: ReturnType<typeof setInterval>;
-    if (ativo) {
-      intervalo = setInterval(() => setSegundos((s) => s + 1), 1000);
-    }
+    if (pausado) return;
+    const intervalo = setInterval(() => setSegundos((s) => s + 1), 1000);
     return () => clearInterval(intervalo);
-  }, [ativo]);
+  }, [pausado]);
 
-  const formatarTempo = (totalSegundos: number) => {
-    const min = Math.floor(totalSegundos / 60)
-      .toString()
-      .padStart(2, "0");
-    const seg = (totalSegundos % 60).toString().padStart(2, "0");
-    return `${min}:${seg}`;
-  };
+  const seriesTotais = registro.reduce((n, ex) => n + ex.series.length, 0);
+  const seriesConcluidas = registro.reduce(
+    (n, ex) => n + ex.series.filter((s) => s.concluida).length,
+    0,
+  );
+  const progresso = seriesTotais
+    ? Math.round((seriesConcluidas / seriesTotais) * 100)
+    : 0;
 
-  const alternarExercicio = (id: string) => {
-    setExercicios(
-      exercicios.map((ex) =>
-        ex.id === id ? { ...ex, concluido: !ex.concluido } : ex,
+  const atualizarSerie = (
+    exId: string,
+    indice: number,
+    mudanca: Partial<ExercicioRegistro["series"][number]>,
+  ) =>
+    setRegistro((atual) =>
+      atual.map((ex) =>
+        ex.id !== exId
+          ? ex
+          : {
+              ...ex,
+              series: ex.series.map((s, i) => (i === indice ? { ...s, ...mudanca } : s)),
+            },
       ),
     );
-  };
-
-  const finalizarTreino = async () => {
-    // Verifica se todos foram marcados (Opcional, apenas para alertar)
-    const todosConcluidos = exercicios.every((ex) => ex.concluido);
-    if (!todosConcluidos) {
-      Alert.alert(
-        "Atenção",
-        "Você não marcou todos os exercícios. Deseja finalizar mesmo assim?",
-        [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Sim, finalizar", onPress: salvarEVoltar },
-        ],
-      );
-      return;
-    }
-    salvarEVoltar();
-  };
 
   const salvarEVoltar = async () => {
+    if (salvando) return;
+    setSalvando(true);
+    const treino: TreinoRegistro = {
+      id: Date.now().toString(),
+      dataISO: new Date().toISOString(),
+      titulo: nomeTreino,
+      duracaoSegundos: segundos,
+      seriesConcluidas,
+      seriesTotais,
+      status: seriesConcluidas === seriesTotais ? "Concluído" : "Parcial",
+      exercicios: registro,
+    };
     try {
-      // Salva um registro simples no AsyncStorage para provar o conceito
-      const novoTreino = {
-        id: Date.now().toString(),
-        data: new Date().toLocaleDateString("pt-BR"),
-        titulo: "Treino Adaptado IA",
-      };
-
-      const historicoAntigo = await AsyncStorage.getItem("@historico_treinos");
-      const historicoParseado = historicoAntigo
-        ? JSON.parse(historicoAntigo)
-        : [];
-      historicoParseado.unshift(novoTreino); // Adiciona no topo da lista
-
-      await AsyncStorage.setItem(
-        "@historico_treinos",
-        JSON.stringify(historicoParseado),
-      );
-
-      Alert.alert("Parabéns!", "Treino finalizado e salvo no histórico.");
-
-      // Volta para a aba de histórico
-      router.push("/(tabs)/historico");
-    } catch (e) {
+      await adicionarTreino(treino);
+      // Fecha a pilha (geração → plano → execução) e abre a aba Histórico.
+      router.dismissAll();
+      router.navigate("/(tabs)/historico");
+    } catch {
+      setSalvando(false);
       Alert.alert("Erro", "Não foi possível salvar o treino.");
     }
   };
 
-  return (
-    <View className="flex-1 bg-gray-50 pt-12">
-      {/* Cabeçalho */}
-      <View className="flex-row justify-between items-center px-6 mb-6">
-        <Text className="text-2xl font-bold text-gray-800">Treino Ativo</Text>
-        <TouchableOpacity
+  const finalizar = () => {
+    if (seriesConcluidas === seriesTotais) {
+      salvarEVoltar();
+      return;
+    }
+    Alert.alert(
+      "Atenção",
+      `Você concluiu ${seriesConcluidas} de ${seriesTotais} séries. Deseja finalizar mesmo assim?`,
+      [
+        { text: "Continuar treinando", style: "cancel" },
+        { text: "Finalizar", onPress: salvarEVoltar },
+      ],
+    );
+  };
+
+  const abandonar = () =>
+    Alert.alert("Abandonar treino?", "O progresso desta sessão será perdido.", [
+      { text: "Continuar", style: "cancel" },
+      { text: "Abandonar", style: "destructive", onPress: () => router.back() },
+    ]);
+
+  if (!plano) {
+    return (
+      <View className="flex-1 bg-gray-900 justify-center items-center p-6">
+        <Ionicons name="alert-circle-outline" size={64} color="#f87171" />
+        <Text className="text-lg font-bold text-white mt-4 text-center">
+          Não foi possível abrir este treino.
+        </Text>
+        <Text className="text-gray-400 text-center mt-2 mb-6">
+          Os dados do plano não foram recebidos. Gere um novo treino.
+        </Text>
+        <Pressable
+          className="bg-lime-400 px-6 py-3 rounded-xl"
           onPress={() => router.back()}
-          className="p-2 bg-gray-200 rounded-full"
         >
-          <Ionicons name="close" size={24} color="#374151" />
-        </TouchableOpacity>
+          <Text className="text-gray-900 font-bold">Voltar</Text>
+        </Pressable>
       </View>
+    );
+  }
 
-      {/* Cronômetro */}
-      <View className="items-center mb-8">
-        <Text className="text-6xl font-light text-gray-800">
-          {formatarTempo(segundos)}
-        </Text>
-        <View className="flex-row mt-4 space-x-4">
-          <TouchableOpacity
-            onPress={() => setAtivo(!ativo)}
-            className={`px-8 py-3 rounded-full flex-row items-center ${ativo ? "bg-orange-100" : "bg-green-100"}`}
+  return (
+    <View className="flex-1 bg-gray-900" style={{ paddingTop: Math.max(insets.top, 16) }}>
+      <View className="px-5 pb-4 border-b border-white/10">
+        <View className="flex-row items-center justify-between mb-4">
+          <Pressable
+            onPress={abandonar}
+            accessibilityLabel="Abandonar treino"
+            className="p-2 bg-gray-800 rounded-full"
           >
-            <Ionicons
-              name={ativo ? "pause" : "play"}
-              size={20}
-              color={ativo ? "#ea580c" : "#16a34a"}
-              className="mr-2"
-            />
-            <Text
-              className={`font-bold ${ativo ? "text-orange-600" : "text-green-600"}`}
-            >
-              {ativo ? "Pausar" : "Iniciar"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {
-              setAtivo(false);
-              setSegundos(0);
-            }}
-            className="px-6 py-3 rounded-full bg-gray-200 justify-center"
-          >
-            <Text className="text-gray-700 font-bold">Zerar</Text>
-          </TouchableOpacity>
+            <Ionicons name="close" size={22} color="#d1d5db" />
+          </Pressable>
+          <Text className="text-gray-400 text-xs font-semibold uppercase tracking-widest">
+            Treino de hoje
+          </Text>
+          <View className="w-10" />
         </View>
-      </View>
-
-      {/* Checklist de Exercícios */}
-      <ScrollView className="flex-1 px-6">
-        <Text className="text-lg font-bold text-gray-800 mb-4">
-          Seu Plano Adaptado
-        </Text>
-
-        {exercicios.map((ex) => (
-          <TouchableOpacity
-            key={ex.id}
-            onPress={() => alternarExercicio(ex.id)}
-            className={`p-4 rounded-xl mb-3 flex-row items-center border ${ex.concluido ? "bg-green-50 border-green-200" : "bg-white border-gray-200 shadow-sm"}`}
+        <View className="flex-row items-end justify-between">
+          <View>
+            <Text className="text-gray-400 text-sm mb-1">Tempo de treino</Text>
+            <Text className="text-white text-4xl font-bold">
+              {formatarDuracao(segundos)}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setPausado((p) => !p)}
+            className="flex-row items-center px-4 py-2 rounded-xl border border-white/10 bg-gray-800"
           >
             <Ionicons
-              name={ex.concluido ? "checkmark-circle" : "ellipse-outline"}
-              size={28}
-              color={ex.concluido ? "#10b981" : "#d1d5db"}
-              className="mr-3"
+              name={pausado ? "play" : "pause"}
+              size={16}
+              color="#a3e635"
             />
-            <View className="flex-1">
-              <Text
-                className={`text-lg font-bold ${ex.concluido ? "text-green-800 line-through" : "text-gray-800"}`}
-              >
-                {ex.nome}
-              </Text>
-              <Text
-                className={`${ex.concluido ? "text-green-600" : "text-gray-500"}`}
-              >
-                {ex.series}
-              </Text>
+            <Text className="text-gray-50 font-medium ml-2">
+              {pausado ? "Retomar" : "Pausar"}
+            </Text>
+          </Pressable>
+        </View>
+        <View className="mt-4 h-2 rounded-full bg-gray-700 overflow-hidden">
+          <View
+            className="h-full rounded-full bg-lime-400"
+            style={{ width: `${progresso}%` }}
+          />
+        </View>
+        <Text className="text-gray-400 text-xs mt-2">
+          {seriesConcluidas}/{seriesTotais} séries concluídas
+        </Text>
+      </View>
+
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: 20, gap: 16 }}
+      >
+        <Text className="text-xl font-bold text-white">{nomeTreino}</Text>
+        {registro.map((ex, exIndice) => (
+          <View
+            key={ex.id}
+            className="bg-gray-800 rounded-2xl border border-white/10 p-4"
+          >
+            <Text className="text-gray-400 text-xs mb-1">
+              Exercício {exIndice + 1} de {registro.length}
+            </Text>
+            <Text className="text-white font-bold text-lg">{ex.nome}</Text>
+            <Text className="text-gray-400 text-sm mb-3">
+              Meta: {ex.repsAlvo} reps
+            </Text>
+            <View className="gap-2">
+              {ex.series.map((serie, i) => (
+                <View
+                  key={i}
+                  className={`flex-row items-center gap-2 rounded-xl border p-2 ${
+                    serie.concluida
+                      ? "border-green-500/30 bg-green-950"
+                      : "border-white/10 bg-gray-900"
+                  }`}
+                >
+                  <Text
+                    className={`w-16 font-semibold text-sm ${
+                      serie.concluida ? "text-green-400" : "text-gray-50"
+                    }`}
+                  >
+                    Série {i + 1}
+                  </Text>
+                  <TextInput
+                    className="flex-1 h-11 rounded-xl bg-gray-700 text-white text-center font-bold"
+                    placeholder="kg"
+                    placeholderTextColor="#6b7280"
+                    keyboardType="decimal-pad"
+                    value={serie.carga}
+                    onChangeText={(v) => atualizarSerie(ex.id, i, { carga: v })}
+                    accessibilityLabel={`Carga da série ${i + 1} em quilos`}
+                  />
+                  <TextInput
+                    className="flex-1 h-11 rounded-xl bg-gray-700 text-white text-center font-bold"
+                    placeholder="reps"
+                    placeholderTextColor="#6b7280"
+                    keyboardType="number-pad"
+                    value={serie.reps}
+                    onChangeText={(v) => atualizarSerie(ex.id, i, { reps: v })}
+                    accessibilityLabel={`Repetições da série ${i + 1}`}
+                  />
+                  <Pressable
+                    onPress={() =>
+                      atualizarSerie(ex.id, i, { concluida: !serie.concluida })
+                    }
+                    accessibilityLabel={`${serie.concluida ? "Desmarcar" : "Marcar"} série ${i + 1} como concluída`}
+                    className={`w-11 h-11 rounded-full border-2 items-center justify-center ${
+                      serie.concluida
+                        ? "bg-green-500 border-green-500"
+                        : "border-gray-500"
+                    }`}
+                  >
+                    {serie.concluida && (
+                      <Ionicons name="checkmark" size={22} color="#111827" />
+                    )}
+                  </Pressable>
+                </View>
+              ))}
             </View>
-          </TouchableOpacity>
+          </View>
         ))}
       </ScrollView>
 
-      {/* Botão Finalizar */}
-      <View className="p-6 bg-white border-t border-gray-100">
-        <TouchableOpacity
-          className="bg-blue-600 py-4 rounded-xl items-center flex-row justify-center shadow-lg shadow-blue-300"
-          onPress={finalizarTreino}
+      <View
+        className="border-t border-white/10 bg-gray-900 px-5 pt-4"
+        style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+      >
+        <Pressable
+          className="bg-lime-400 h-14 rounded-2xl items-center flex-row justify-center"
+          onPress={finalizar}
+          disabled={salvando}
         >
-          <Ionicons name="trophy-outline" size={24} color="white" />
-          <Text className="text-white font-bold text-lg ml-2">
-            Finalizar Treino
+          <Text className="text-gray-900 font-bold text-base mr-2">
+            Finalizar treino
           </Text>
-        </TouchableOpacity>
+          <Ionicons name="checkmark" size={20} color="#111827" />
+        </Pressable>
       </View>
     </View>
   );

@@ -1,119 +1,131 @@
-import { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  ActivityIndicator,
-  TouchableOpacity,
-} from "react-native";
+import { useCallback, useState } from "react";
+import { View, Text, FlatList, ActivityIndicator, Pressable } from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { carregarHistorico } from "@/lib/storage";
+import { diaDaSemana, diaDoMes, formatarDuracao } from "@/lib/format";
+import type { TreinoRegistro } from "@/lib/types";
 
 export default function Historico() {
-  const [historico, setHistorico] = useState<
-    { id: string; data: string; titulo: string }[]
-  >([]);
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [historico, setHistorico] = useState<TreinoRegistro[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(false);
 
-  useEffect(() => {
-    carregarHistorico();
-  }, []);
-
-  const carregarHistorico = () => {
+  const carregar = useCallback(async () => {
     setCarregando(true);
     setErro(false);
+    try {
+      setHistorico(await carregarHistorico());
+    } catch {
+      setErro(true);
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
 
-    setTimeout(async () => {
-      try {
-        const historicoSalvo = await AsyncStorage.getItem("@historico_treinos");
-        if (historicoSalvo) {
-          setHistorico(JSON.parse(historicoSalvo));
-        } else {
-          setHistorico([]);
-        }
-      } catch (e) {
-        setErro(true);
-      } finally {
-        setCarregando(false);
-      }
-    }, 1000);
-  };
+  // Recarrega ao voltar para a aba: um treino pode ter sido finalizado ou excluído.
+  useFocusEffect(
+    useCallback(() => {
+      carregar();
+    }, [carregar]),
+  );
 
-  // 1. Estado de Carregamento
   if (carregando) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-50">
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text className="text-gray-500 mt-4">
+      <View className="flex-1 justify-center items-center bg-gray-900">
+        <ActivityIndicator size="large" color="#a3e635" />
+        <Text className="text-gray-400 mt-4">
           Buscando seus treinos passados...
         </Text>
       </View>
     );
   }
 
-  // 2. Estado de Erro
   if (erro) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-50 p-6">
-        <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
-        <Text className="text-lg font-bold text-gray-800 mt-4 text-center">
+      <View className="flex-1 justify-center items-center bg-gray-900 p-6">
+        <Ionicons name="alert-circle-outline" size={64} color="#f87171" />
+        <Text className="text-lg font-bold text-white mt-4 text-center">
           Ops! Algo deu errado.
         </Text>
-        <Text className="text-gray-500 text-center mt-2 mb-6">
+        <Text className="text-gray-400 text-center mt-2 mb-6">
           Não foi possível carregar o seu histórico.
         </Text>
-        <TouchableOpacity
-          className="bg-blue-500 px-6 py-3 rounded-lg"
-          onPress={carregarHistorico}
+        <Pressable
+          className="bg-lime-400 px-6 py-3 rounded-xl"
+          onPress={carregar}
         >
-          <Text className="text-white font-bold">Tentar Novamente</Text>
-        </TouchableOpacity>
+          <Text className="text-gray-900 font-bold">Tentar novamente</Text>
+        </Pressable>
       </View>
     );
   }
 
-  // 3. Estado de Lista Vazia
   if (historico.length === 0) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-50 p-6">
-        <Ionicons name="barbell-outline" size={64} color="#9ca3af" />
-        <Text className="text-xl font-bold text-gray-800 mt-4 text-center">
+      <View className="flex-1 justify-center items-center bg-gray-900 p-6">
+        <Ionicons name="barbell-outline" size={64} color="#6b7280" />
+        <Text className="text-xl font-bold text-white mt-4 text-center">
           Nenhum treino registrado
         </Text>
-        <Text className="text-gray-500 text-center mt-2">
-          Você ainda não concluiu nenhum treino. Vá para a Home e inicie o seu
-          primeiro desafio!
+        <Text className="text-gray-400 text-center mt-2">
+          Você ainda não concluiu nenhum treino. Vá para o Início e gere o
+          primeiro!
         </Text>
       </View>
     );
   }
 
-  // 4. Estado de Listagem (Sucesso)
   return (
-    <View className="flex-1 bg-gray-50 p-4 pt-12">
-      <Text className="text-3xl font-bold mb-6 text-gray-800">Histórico</Text>
+    <View className="flex-1 bg-gray-900 px-5" style={{ paddingTop: insets.top + 16 }}>
+      <Text className="text-xs font-semibold uppercase tracking-widest text-lime-400 mb-2">
+        Atividade
+      </Text>
+      <Text className="text-3xl font-bold text-white mb-1">Seu histórico</Text>
+      <Text className="text-gray-400 mb-6">
+        Acompanhe sua jornada, um treino por vez.
+      </Text>
       <FlatList
         data={historico}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View className="bg-white p-4 rounded-xl mb-4 shadow-sm border border-gray-100 flex-row items-center">
-            <Ionicons
-              name="checkmark-circle"
-              size={32}
-              color="#10b981"
-              className="mr-4"
-            />
-            <View>
-              <Text className="font-bold text-lg text-gray-800">
-                {item.titulo}
-              </Text>
-              <Text className="text-gray-500 mt-1">
-                Concluído em: {item.data}
-              </Text>
-            </View>
-          </View>
-        )}
+        contentContainerStyle={{ paddingBottom: 24, gap: 12 }}
+        renderItem={({ item }) => {
+          const completo = item.status === "Concluído";
+          return (
+            <Pressable
+              className="flex-row items-center bg-gray-800 rounded-2xl p-4 border border-white/10"
+              onPress={() =>
+                router.push({ pathname: "/treino/[id]", params: { id: item.id } })
+              }
+            >
+              <View className="w-11 h-11 rounded-xl bg-gray-700 items-center justify-center mr-3">
+                <Text className="text-white font-bold text-lg leading-5">
+                  {diaDoMes(item.dataISO)}
+                </Text>
+                <Text className="text-gray-400 text-[10px]">
+                  {diaDaSemana(item.dataISO)}
+                </Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-gray-100 font-semibold" numberOfLines={1}>
+                  {item.titulo}
+                </Text>
+                <Text
+                  className={`text-xs font-medium mt-1 ${
+                    completo ? "text-green-400" : "text-yellow-400"
+                  }`}
+                >
+                  {item.status} · {item.seriesConcluidas}/{item.seriesTotais} séries ·{" "}
+                  {formatarDuracao(item.duracaoSegundos)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+            </Pressable>
+          );
+        }}
       />
     </View>
   );
