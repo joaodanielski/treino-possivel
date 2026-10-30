@@ -11,9 +11,17 @@ export default function RootLayout() {
           headerStyle: { backgroundColor: "#030712" },
           headerTintColor: "#f9fafb",
           contentStyle: { backgroundColor: "#111827" },
+          headerBackTitle: "Voltar", 
+          // headerBackTitleVisible: false, // Descomente esta linha se quiser exibir APENAS a seta (<) sem texto
         }}
       >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen 
+          name="(tabs)" 
+          options={{ 
+            headerShown: false,
+            title: "Início" // Define o nome da rota pai para não assumir "(tabs)"
+          }} 
+        />
         <Stack.Screen
           name="treino/geracao-ia"
           options={{ presentation: "modal", headerShown: false }}
