@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, Alert } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,6 +7,7 @@ import { adicionarTreino } from "@/lib/storage";
 import { formatarDuracao } from "@/lib/format";
 import { lerExercicios, primeiro } from "@/lib/params";
 import type { ExercicioRegistro, TreinoRegistro } from "@/lib/types";
+import { avisar } from "@/lib/avisar";
 
 export default function Execucao() {
   const router = useRouter();
@@ -87,7 +88,7 @@ export default function Execucao() {
       router.navigate("/(tabs)/historico");
     } catch {
       setSalvando(false);
-      Alert.alert("Erro", "Não foi possível salvar o treino.");
+      avisar("Erro", "Não foi possível salvar o treino.");
     }
   };
 
@@ -96,7 +97,7 @@ export default function Execucao() {
       salvarEVoltar();
       return;
     }
-    Alert.alert(
+    avisar(
       "Atenção",
       `Você concluiu ${seriesConcluidas} de ${seriesTotais} séries. Deseja finalizar mesmo assim?`,
       [
@@ -107,7 +108,7 @@ export default function Execucao() {
   };
 
   const abandonar = () =>
-    Alert.alert("Abandonar treino?", "O progresso desta sessão será perdido.", [
+    avisar("Abandonar treino?", "O progresso desta sessão será perdido.", [
       { text: "Continuar", style: "cancel" },
       { text: "Abandonar", style: "destructive", onPress: () => router.back() },
     ]);
@@ -208,14 +209,14 @@ export default function Execucao() {
                   }`}
                 >
                   <Text
-                    className={`w-16 font-semibold text-sm ${
+                    className={`w-14 font-semibold text-sm ${
                       serie.concluida ? "text-green-400" : "text-gray-50"
                     }`}
                   >
                     Série {i + 1}
                   </Text>
                   <TextInput
-                    className="flex-1 h-11 rounded-xl bg-gray-700 text-white text-center font-bold"
+                    className="flex-1 min-w-0 h-11 rounded-xl bg-gray-700 text-white text-center font-bold"
                     placeholder="kg"
                     placeholderTextColor="#6b7280"
                     keyboardType="decimal-pad"
@@ -224,7 +225,7 @@ export default function Execucao() {
                     accessibilityLabel={`Carga da série ${i + 1} em quilos`}
                   />
                   <TextInput
-                    className="flex-1 h-11 rounded-xl bg-gray-700 text-white text-center font-bold"
+                    className="flex-1 min-w-0 h-11 rounded-xl bg-gray-700 text-white text-center font-bold"
                     placeholder="reps"
                     placeholderTextColor="#6b7280"
                     keyboardType="number-pad"

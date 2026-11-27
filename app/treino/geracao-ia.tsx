@@ -6,7 +6,6 @@ import {
   Pressable,
   ActivityIndicator,
   ScrollView,
-  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Chip } from "@/components/Chip";
 import { carregarPerfil, PERFIL_PADRAO } from "@/lib/storage";
 import { EQUIPAMENTOS, type Perfil } from "@/lib/types";
+import { avisar } from "@/lib/avisar";
 
 export default function GeracaoIA() {
   const router = useRouter();
@@ -48,11 +48,11 @@ export default function GeracaoIA() {
   const gerar = () => {
     const minutos = Number(tempo);
     if (!Number.isFinite(minutos) || minutos < 10 || minutos > 180) {
-      Alert.alert("Tempo inválido", "Informe um tempo entre 10 e 180 minutos.");
+      avisar("Tempo inválido", "Informe um tempo entre 10 e 180 minutos.");
       return;
     }
     if (equipamentos.length === 0) {
-      Alert.alert("Equipamentos", "Selecione ao menos um equipamento.");
+      avisar("Equipamentos", "Selecione ao menos um equipamento.");
       return;
     }
     setGerando(true);

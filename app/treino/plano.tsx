@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { gerarPlanoMock, substituirExercicioMock } from "@/lib/mock-plano";
 import { primeiro } from "@/lib/params";
 import { OBJETIVOS, type Objetivo, type Plano } from "@/lib/types";
+import { avisar } from "@/lib/avisar";
 
 export default function PlanoTreino() {
   const router = useRouter();
@@ -47,7 +48,7 @@ export default function PlanoTreino() {
       plano.exercicios.map((e) => e.nome),
     );
     if (!nova) {
-      Alert.alert(
+      avisar(
         "Sem alternativas",
         "Não há outro exercício disponível para os equipamentos escolhidos.",
       );
