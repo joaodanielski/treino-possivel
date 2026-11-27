@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   Pressable,
-  Alert,
   ActivityIndicator,
   ScrollView,
 } from "react-native";
@@ -14,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Chip } from "@/components/Chip";
 import { carregarPerfil, PERFIL_PADRAO, salvarPerfil } from "@/lib/storage";
 import { EQUIPAMENTOS, OBJETIVOS, type Perfil as PerfilTipo } from "@/lib/types";
+import { avisar } from "@/lib/avisar";
 
 const TEMPO_MIN = 15;
 const TEMPO_MAX = 120;
@@ -29,7 +29,7 @@ export default function Perfil() {
         try {
           setPerfil(await carregarPerfil());
         } catch {
-          Alert.alert("Erro", "Não foi possível carregar os dados offline.");
+          avisar("Erro", "Não foi possível carregar os dados offline.");
         } finally {
           setCarregando(false);
         }
@@ -56,18 +56,18 @@ export default function Perfil() {
 
   const salvar = async () => {
     if (!perfil.nome.trim()) {
-      Alert.alert("Nome obrigatório", "Informe seu nome ou apelido.");
+      avisar("Nome obrigatório", "Informe seu nome ou apelido.");
       return;
     }
     if (perfil.equipamentos.length === 0) {
-      Alert.alert("Equipamentos", "Selecione ao menos um equipamento.");
+      avisar("Equipamentos", "Selecione ao menos um equipamento.");
       return;
     }
     try {
       await salvarPerfil({ ...perfil, nome: perfil.nome.trim() });
-      Alert.alert("Pronto!", "Seu perfil foi salvo no dispositivo.");
+      avisar("Pronto!", "Seu perfil foi salvo no dispositivo.");
     } catch {
-      Alert.alert("Erro", "Não foi possível salvar os dados.");
+      avisar("Erro", "Não foi possível salvar os dados.");
     }
   };
 

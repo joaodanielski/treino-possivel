@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { buscarTreino, removerTreino } from "@/lib/storage";
 import { formatarData, formatarDuracao } from "@/lib/format";
 import { primeiro } from "@/lib/params";
 import type { TreinoRegistro } from "@/lib/types";
+import { avisar } from "@/lib/avisar";
 
 type Estado =
   | { tipo: "carregando" }
@@ -31,7 +32,7 @@ export default function DetalheTreino() {
   }, [idTreino]);
 
   const excluir = () =>
-    Alert.alert("Excluir treino?", "Esta ação não pode ser desfeita.", [
+    avisar("Excluir treino?", "Esta ação não pode ser desfeita.", [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Excluir",
@@ -41,7 +42,7 @@ export default function DetalheTreino() {
             if (idTreino) await removerTreino(idTreino);
             router.back();
           } catch {
-            Alert.alert("Erro", "Não foi possível excluir o treino.");
+            avisar("Erro", "Não foi possível excluir o treino.");
           }
         },
       },
